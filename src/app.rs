@@ -3318,6 +3318,7 @@ impl App {
             let playing = self.now_playing().is_some_and(|now| now.playing);
             let action = match command {
                 ControlCommand::Show => Some(Action::ShowWindow),
+                ControlCommand::Quit => Some(Action::Quit),
                 ControlCommand::ReloadThemes => Some(Action::ReloadThemes),
                 ControlCommand::PlayPause => Some(Action::TogglePlay),
                 ControlCommand::Play => (!playing).then_some(Action::TogglePlay),
@@ -22108,6 +22109,7 @@ mod tests {
             ControlCommand::SetVolume(240),
             ControlCommand::ToggleShuffle,
             ControlCommand::Show,
+            ControlCommand::Quit,
         ]);
         app.handle_control_commands();
 
@@ -22124,6 +22126,7 @@ mod tests {
                     Action::SetVolume(100),
                     Action::ToggleShuffle,
                     Action::ShowWindow,
+                    Action::Quit,
                 ]
             ),
             "{:?}",

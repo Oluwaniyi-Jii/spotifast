@@ -145,6 +145,9 @@ enum Control {
         #[arg(long)]
         raw: bool,
     },
+    /// Shut down the running instance (used by the Windows uninstaller).
+    #[command(hide = true)]
+    Quit,
     /// Bring the window of the running instance forward
     Show,
     /// Reload local palette files without starting the app or interrupting playback
@@ -170,6 +173,16 @@ enum Repeat {
 /// Sends one control verb to the running instance over the
 /// single-instance channel.
 fn run_control(control: Control) -> i32 {
+    if matches!(&control, Control::Quit) {
+        return match single_instance::quit() {
+            Ok(()) => 0,
+            Err(error) => {
+                eprintln!("Spotifast could not be closed: {error}");
+                1
+            }
+        };
+    }
+
     let raw = matches!(
         control,
         Control::NowPlaying { raw: true } | Control::Devices { raw: true }
@@ -208,6 +221,7 @@ fn run_control(control: Control) -> i32 {
         Control::Devices { .. } => "devices".to_owned(),
         Control::Transfer { device_id } => format!("transfer {device_id}"),
         Control::NowPlaying { .. } => "nowplaying".to_owned(),
+        Control::Quit => "quit".to_owned(),
         Control::Show => "show".to_owned(),
         Control::ReloadThemes => "reload-themes".to_owned(),
     };
@@ -1404,6 +1418,10 @@ mod tests {
         let verb = Cli::try_parse_from(["spotifast", "next"]).expect("a verb parses");
         assert!(matches!(verb.control, Some(Control::Next)));
         assert!(verb.link.is_none());
+
+        let quit = Cli::try_parse_from(["spotifast", "quit"]).expect("the quit command parses");
+        assert!(matches!(quit.control, Some(Control::Quit)));
+        assert!(!Cli::command().render_help().to_string().contains("quit"));
 
         let bare = Cli::try_parse_from(["spotifast"]).expect("a plain launch parses");
         assert!(bare.link.is_none() && bare.control.is_none());

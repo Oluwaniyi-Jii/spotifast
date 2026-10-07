@@ -48,6 +48,10 @@ or the ARM version if your PC uses an ARM processor:
 - [Windows installer (most PCs)]({{ base }}/spotifast-v{{ v }}-x86_64-pc-windows-msvc-setup.exe)
 - [Windows installer (ARM PCs)]({{ base }}/spotifast-v{{ v }}-aarch64-pc-windows-msvc-setup.exe)
 
+When uninstalling, the installer closes Spotifast if it is running. If it
+cannot close the app, it stops the uninstall; close Spotifast, including from
+the system tray, and try again.
+
 To run Spotifast without an installer, download a ZIP file, extract it, and
 open `spotifast.exe`.
 

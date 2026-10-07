@@ -7,7 +7,7 @@
 ; Arch is x86_64 or aarch64, as in the Rust target triple, so the installer
 ; is named like the zip next to it. It needs no administrator rights: the
 ; program goes to the user's own Programs folder with a Start menu entry,
-; and a running copy is closed before an update replaces it.
+; and a running copy is closed before an update replaces it or is uninstalled.
 
 #ifndef Version
   #error Version must be defined on the ISCC command line
@@ -126,12 +126,31 @@ procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   Command: String;
   Exe: String;
+  ResultCode: Integer;
 begin
   if CurUninstallStep <> usUninstall then
     Exit;
+  Exe := ExpandConstant('{app}\{#AppExeName}');
+  if FileExists(Exe) then
+  begin
+    if not Exec(Exe, 'quit', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+    begin
+      MsgBox('Spotifast could not be closed. Close Spotifast, including from the ' +
+        'system tray, and run the uninstaller again. Uninstall has been stopped.',
+        mbError, MB_OK);
+      Abort;
+    end;
+    if ResultCode <> 0 then
+    begin
+      MsgBox('Spotifast could not be closed. Close Spotifast, including from the ' +
+        'system tray, and run the uninstaller again. Uninstall has been stopped.',
+        mbError, MB_OK);
+      Abort;
+    end;
+  end;
   if not RegQueryStringValue(HKCU, 'Software\Classes\spotify\shell\open\command', '', Command) then
     Exit;
-  Exe := Lowercase(ExpandConstant('{app}\{#AppExeName}'));
+  Exe := Lowercase(Exe);
   if Pos(Exe, Lowercase(Command)) > 0 then
     RegDeleteKeyIncludingSubkeys(HKCU, 'Software\Classes\spotify');
 end;

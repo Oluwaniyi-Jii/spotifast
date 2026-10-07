@@ -48,6 +48,8 @@ pub enum Outcome {
 pub enum ControlCommand {
     /// Bring the window forward, creating it if needed.
     Show,
+    /// Quit the running application.
+    Quit,
     /// Re-read local palette files without showing the window or restarting audio.
     ReloadThemes,
     PlayPause,
@@ -164,6 +166,50 @@ pub enum Reply {
 /// Sends one verb to the running instance and reads its reply.
 pub fn send(verb: &str) -> std::io::Result<Reply> {
     reply(&slot().send(verb)?)
+}
+
+/// Asks the running instance to quit and waits for its control channel to
+/// close. No running instance is already in the desired state.
+pub fn quit() -> std::io::Result<()> {
+    match send("quit") {
+        Ok(Reply::Ok) => {}
+        Ok(_) => {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "the running Spotifast answered something unexpected",
+            ));
+        }
+        Err(error) if !instance_unavailable(&error) => return Err(error),
+        Err(_) => return Ok(()),
+    }
+
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
+    loop {
+        match send("nowplaying") {
+            Ok(_) => {
+                if std::time::Instant::now() >= deadline {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::TimedOut,
+                        "the running Spotifast did not close in time",
+                    ));
+                }
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+            Err(error) if instance_unavailable(&error) => return Ok(()),
+            Err(error) => return Err(error),
+        }
+    }
+}
+
+fn instance_unavailable(error: &std::io::Error) -> bool {
+    matches!(
+        error.kind(),
+        std::io::ErrorKind::NotFound
+            | std::io::ErrorKind::ConnectionRefused
+            | std::io::ErrorKind::ConnectionReset
+            | std::io::ErrorKind::ConnectionAborted
+            | std::io::ErrorKind::BrokenPipe
+    )
 }
 
 /// Reads the running instance's reply, without the `spotifast:` prefix the
@@ -284,6 +330,7 @@ fn parse(line: &str) -> Option<Request> {
     };
     let command = match (verb, argument) {
         ("show", None) => ControlCommand::Show,
+        ("quit", None) => ControlCommand::Quit,
         ("reload-themes", None) => ControlCommand::ReloadThemes,
         ("playpause", None) => ControlCommand::PlayPause,
         ("play", None) => ControlCommand::Play,
@@ -357,6 +404,7 @@ mod tests {
     fn parses_every_control_verb() {
         // #given / #when / #then
         assert_eq!(command("show\n"), Some(ControlCommand::Show));
+        assert_eq!(command("quit"), Some(ControlCommand::Quit));
         assert_eq!(command("reload-themes"), Some(ControlCommand::ReloadThemes));
         assert_eq!(command("reload-themes extra"), None);
         assert_eq!(command("playpause"), Some(ControlCommand::PlayPause));
@@ -421,6 +469,22 @@ mod tests {
         );
         assert!(matches!(parse("nowplaying"), Some(Request::NowPlaying)));
         assert!(matches!(parse("devices"), Some(Request::Devices)));
+    }
+
+    #[test]
+    fn unavailable_instances_are_distinguished_from_shutdown_failures() {
+        for kind in [
+            std::io::ErrorKind::NotFound,
+            std::io::ErrorKind::ConnectionRefused,
+            std::io::ErrorKind::ConnectionReset,
+            std::io::ErrorKind::ConnectionAborted,
+            std::io::ErrorKind::BrokenPipe,
+        ] {
+            assert!(instance_unavailable(&std::io::Error::from(kind)));
+        }
+        assert!(!instance_unavailable(&std::io::Error::from(
+            std::io::ErrorKind::TimedOut
+        )));
     }
 
     #[test]
